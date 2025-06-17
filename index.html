@@ -48,62 +48,70 @@
   </style>
 </head>
 <body>
-  <h1>サービスカウントダウン</h1>
+  <h1>サービスカウントダウンクロック</h1>
   <div class="grid" id="cards"></div>
 
   <script>
     const SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQpiZZxE_7sQZgkAvTfRgsDwqg4EGBTUmXY4nnhxqy4bMdXXbzLV98rSEe9d7kX_dI7ZF_-HeQRUZQA/pub?output=csv';
-    let currentTcIndex = 0;
     let sheetData = [];
     let tcSequence = [];
+    const currentTcIndexMap = new Map();
 
     function parseSheet(data) {
       const entryRow = data[3];
       const carNos = entryRow.slice(2).filter(e => e !== '');
-      tcSequence = data.slice(4).map(row => row[0]).filter(tc => tc);
-      const currentRow = data.find(r => r[0] === tcSequence[currentTcIndex]);
-      if (!currentRow) return [];
-
-      const label = currentRow[1];
-      const countdownThreshold = parseInt(currentRow[2]);
-      const cards = [];
+      const tcRows = data.slice(4).filter(row => row[0]);
+      tcSequence = tcRows.map(row => row[0]);
       const now = dayjs();
+      const cards = [];
 
-      for (let i = 0; i < carNos.length; i++) {
-        const carNo = carNos[i];
-        const timeStr = currentRow[3 + i];
-        if (!timeStr) continue;
+      carNos.forEach((carNo, i) => {
+        const tcIndex = currentTcIndexMap.has(carNo) ? currentTcIndexMap.get(carNo) : 0;
+        if (tcIndex >= tcRows.length) return;
+        const tcRow = tcRows[tcIndex];
 
-        let serviceTime = dayjs(timeStr, 'HH:mm:ss');
-        if (!serviceTime.isValid()) continue;
+        const label = tcRow[1];
+        const countdownThreshold = parseInt(tcRow[2]);
+        const timeStr = tcRow[3 + i];
+        if (!timeStr || !/^\d{1,2}:\d{2}(?::\d{2})?$/.test(timeStr)) return;
 
-        serviceTime = serviceTime.set('year', now.year()).set('month', now.month()).set('date', now.date());
+        const [h, m, s = 0] = timeStr.split(":").map(Number);
+        let serviceTime = now.set('hour', h).set('minute', m).set('second', s).set('millisecond', 0);
+        if (!serviceTime.isValid()) return;
+
         const countdownStart = serviceTime.subtract(countdownThreshold, 'minute');
-
         let displayText;
         let late = false;
 
         if (now.isBefore(countdownStart)) {
           displayText = serviceTime.format('HH:mm:ss');
+        } else if (now.isBefore(serviceTime)) {
+          const diff = serviceTime.diff(now, 'second');
+          const hh = Math.floor(diff / 3600);
+          const mm = Math.floor((diff % 3600) / 60);
+          const ss = diff % 60;
+          displayText = `T-${hh.toString().padStart(2, 0)}:${mm.toString().padStart(2, 0)}:${ss.toString().padStart(2, 0)}`;
         } else {
           let diff = now.diff(serviceTime, 'second');
           const sign = diff < 0 ? '-' : '+';
           diff = Math.abs(diff);
-          const h = Math.floor(diff / 3600);
-          const m = Math.floor((diff % 3600) / 60);
-          const s = diff % 60;
-          displayText = `${sign}${h.toString().padStart(2,0)}:${m.toString().padStart(2,0)}:${s.toString().padStart(2,0)}`;
+          const hh = Math.floor(diff / 3600);
+          const mm = Math.floor((diff % 3600) / 60);
+          const ss = diff % 60;
+          displayText = `${sign}${hh.toString().padStart(2, 0)}:${mm.toString().padStart(2, 0)}:${ss.toString().padStart(2, 0)}`;
           late = sign === '+';
         }
+
         cards.push({ carNo, label, countdown: displayText, late });
-      }
+      });
+
       return cards;
     }
 
     function render(cards) {
       const grid = document.getElementById('cards');
       grid.innerHTML = '';
-      for (const c of cards) {
+      cards.forEach(c => {
         const div = document.createElement('div');
         div.className = 'card';
         div.innerHTML = `
@@ -113,22 +121,25 @@
           <button class="back-btn">←</button>
         `;
         div.addEventListener('click', () => {
-          currentTcIndex = (currentTcIndex + 1) % tcSequence.length;
+          const current = currentTcIndexMap.get(c.carNo) || 0;
+          const next = (current + 1) % tcSequence.length;
+          currentTcIndexMap.set(c.carNo, next);
           refresh();
         });
-        div.querySelector('.back-btn').addEventListener('click', (e) => {
+        div.querySelector('.back-btn').addEventListener('click', e => {
           e.stopPropagation();
-          currentTcIndex = (currentTcIndex - 1 + tcSequence.length) % tcSequence.length;
+          const current = currentTcIndexMap.get(c.carNo) || 0;
+          const next = (current - 1 + tcSequence.length) % tcSequence.length;
+          currentTcIndexMap.set(c.carNo, next);
           refresh();
         });
         grid.appendChild(div);
-      }
+      });
     }
 
     function refresh() {
       if (sheetData.length > 0) {
-        const cards = parseSheet(sheetData);
-        render(cards);
+        render(parseSheet(sheetData));
       }
     }
 
