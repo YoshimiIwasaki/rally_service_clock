@@ -7,7 +7,8 @@
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/dayjs@1/dayjs.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/dayjs@1/plugin/customParseFormat.js"></script>
-  <script>dayjs.extend(dayjs_plugin_customParseFormat);</script>
+  <script src="https://cdn.jsdelivr.net/npm/dayjs@1/plugin/utc.js"></script>
+  <script>dayjs.extend(dayjs_plugin_customParseFormat); dayjs.extend(dayjs_plugin_utc);</script>
   <style>
     body {
       background: #111;
@@ -51,7 +52,7 @@
   <div class="grid" id="cards"></div>
 
   <script>
-    const SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQpiZZxE_7sQZgkAvTfRgsDwqg4EGBTUmXY4nnhxqy4bMdXXbzLV98rSEe9d7kX_dI7ZF_-HeQRUZQA/pub?output=csv'; // ★実際のCSV公開URLに差し替えてください
+    const SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQpiZZxE_7sQZgkAvTfRgsDwqg4EGBTUmXY4nnhxqy4bMdXXbzLV98rSEe9d7kX_dI7ZF_-HeQRUZQA/pub?output=csv';
     let currentTcIndex = 0;
     let sheetData = [];
     let tcSequence = [];
@@ -59,7 +60,7 @@
     function parseSheet(data) {
       const entryRow = data[3];
       const carNos = entryRow.slice(2).filter(e => e !== '');
-      tcSequence = data.slice(5).map(row => row[0]).filter(tc => tc); // 自動取得
+      tcSequence = data.slice(4).map(row => row[0]).filter(tc => tc);
       const currentRow = data.find(r => r[0] === tcSequence[currentTcIndex]);
       if (!currentRow) return [];
 
@@ -67,18 +68,21 @@
       const countdownThreshold = parseInt(currentRow[2]);
       const cards = [];
       const now = dayjs();
-      const todayStr = now.format('YYYY-MM-DD');
 
       for (let i = 0; i < carNos.length; i++) {
         const carNo = carNos[i];
         const timeStr = currentRow[3 + i];
         if (!timeStr) continue;
 
-        const serviceTime = dayjs(`${todayStr} ${timeStr}`, 'YYYY-MM-DD HH:mm:ss');
+        let serviceTime = dayjs(timeStr, 'HH:mm:ss');
+        if (!serviceTime.isValid()) continue;
+
+        serviceTime = serviceTime.set('year', now.year()).set('month', now.month()).set('date', now.date());
         const countdownStart = serviceTime.subtract(countdownThreshold, 'minute');
 
         let displayText;
         let late = false;
+
         if (now.isBefore(countdownStart)) {
           displayText = serviceTime.format('HH:mm:ss');
         } else {
@@ -139,8 +143,8 @@
     }
 
     fetchData();
-    setInterval(refresh, 10000);
-    setInterval(fetchData, 60000);
+    setInterval(refresh, 1000);
+    setInterval(fetchData, 30000);
   </script>
 </body>
 </html>
