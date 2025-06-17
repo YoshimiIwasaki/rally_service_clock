@@ -67,13 +67,14 @@
       const countdownThreshold = parseInt(currentRow[2]);
       const cards = [];
       const now = dayjs();
+      const todayStr = now.format('YYYY-MM-DD');
 
       for (let i = 0; i < carNos.length; i++) {
         const carNo = carNos[i];
         const timeStr = currentRow[3 + i];
         if (!timeStr) continue;
 
-        const serviceTime = dayjs(timeStr, 'HH:mm:ss');
+        const serviceTime = dayjs(`${todayStr} ${timeStr}`, 'YYYY-MM-DD HH:mm:ss');
         const countdownStart = serviceTime.subtract(countdownThreshold, 'minute');
 
         let displayText;
