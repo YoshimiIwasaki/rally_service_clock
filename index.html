@@ -18,7 +18,7 @@
     }
     .grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
       gap: 1em;
     }
     .card {
@@ -30,9 +30,38 @@
       cursor: pointer;
       position: relative;
     }
-    .car-no { font-size: 1.2em; margin-bottom: 0.2em; }
-    .countdown { font-size: 1.8em; font-weight: bold; }
-    .late { color: #ff3b3b; text-shadow: 0 0 5px #f00; }
+    .driver-name {
+      font-size: 1.4em;
+      font-weight: bold;
+      margin-bottom: 0.2em;
+    }
+    .car-info {
+      font-size: 0.9em;
+      margin-bottom: 0.5em;
+      color: #ccc;
+    }
+    .tc-label {
+      font-size: 1.2em;
+      font-weight: bold;
+      color: #ddd;
+      margin-bottom: 0.3em;
+    }
+    .car-no {
+      font-size: 1em;
+      color: #aaa;
+      margin-bottom: 0.2em;
+    }
+    .countdown {
+      font-size: 1.8em;
+      font-weight: bold;
+    }
+    .late {
+      color: #ff3b3b;
+      text-shadow: 0 0 5px #f00;
+    }
+    .upcoming {
+      color: #7ec8f7;
+    }
     .back-btn {
       position: absolute;
       top: 5px;
@@ -45,11 +74,18 @@
       cursor: pointer;
       font-size: 0.8em;
     }
+    .no-cars {
+      text-align: center;
+      margin-top: 2em;
+      font-size: 1.5em;
+      color: #888;
+    }
   </style>
 </head>
 <body>
   <h1>サービスカウントダウンクロック</h1>
   <div class="grid" id="cards"></div>
+  <div class="no-cars" id="no-cars" style="display: none;">No car scheduled</div>
 
   <script>
     const SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQpiZZxE_7sQZgkAvTfRgsDwqg4EGBTUmXY4nnhxqy4bMdXXbzLV98rSEe9d7kX_dI7ZF_-HeQRUZQA/pub?output=csv';
@@ -59,32 +95,54 @@
 
     function parseSheet(data) {
       const entryRow = data[3];
-      const carNos = entryRow.slice(2).filter(e => e !== '');
+      const nameRow = data[2];
+      const carRow = data[1];
+      const carNos = [];
+
+      for (let idx = 2; idx < entryRow.length; idx++) {
+        if (entryRow[idx]) {
+          carNos.push({ value: entryRow[idx], idx });
+        }
+      }
+
       const tcRows = data.slice(4).filter(row => row[0]);
       tcSequence = tcRows.map(row => row[0]);
       const now = dayjs();
       const cards = [];
+      const skipped = [];
 
-      carNos.forEach((carNo, i) => {
+      carNos.forEach(({ value: carNo, idx }) => {
         const tcIndex = currentTcIndexMap.has(carNo) ? currentTcIndexMap.get(carNo) : 0;
-        if (tcIndex >= tcRows.length) return;
+        if (tcIndex >= tcRows.length) {
+          skipped.push(carNo + ': TC index out of bounds');
+          return;
+        }
         const tcRow = tcRows[tcIndex];
 
         const label = tcRow[1];
         const countdownThreshold = parseInt(tcRow[2]);
-        const timeStr = tcRow[3 + i];
-        if (!timeStr || !/^\d{1,2}:\d{2}(?::\d{2})?$/.test(timeStr)) return;
+        const timeStrRaw = tcRow[idx];
+        const timeStr = (timeStrRaw || '').trim();
+
+        if (!/^\d{1,2}:\d{2}(?::\d{2})?$/.test(timeStr)) {
+          skipped.push(carNo + ': invalid time format');
+          return;
+        }
 
         const [h, m, s = 0] = timeStr.split(":").map(Number);
         let serviceTime = now.set('hour', h).set('minute', m).set('second', s).set('millisecond', 0);
-        if (!serviceTime.isValid()) return;
+        if (!serviceTime.isValid()) {
+          skipped.push(carNo + ': invalid date');
+          return;
+        }
 
         const countdownStart = serviceTime.subtract(countdownThreshold, 'minute');
         let displayText;
-        let late = false;
+        let displayClass = '';
 
         if (now.isBefore(countdownStart)) {
           displayText = serviceTime.format('HH:mm:ss');
+          displayClass = 'upcoming';
         } else if (now.isBefore(serviceTime)) {
           const diff = serviceTime.diff(now, 'second');
           const hh = Math.floor(diff / 3600);
@@ -99,25 +157,47 @@
           const mm = Math.floor((diff % 3600) / 60);
           const ss = diff % 60;
           displayText = `${sign}${hh.toString().padStart(2, 0)}:${mm.toString().padStart(2, 0)}:${ss.toString().padStart(2, 0)}`;
-          late = sign === '+';
+          displayClass = 'late';
         }
 
-        cards.push({ carNo, label, countdown: displayText, late });
+        const carName = nameRow[idx] || '';
+        const driverNames = carRow[idx] || '';
+
+        cards.push({
+          carNo,
+          label,
+          countdown: displayText,
+          displayClass,
+          driverNames,
+          carName
+        });
       });
 
+      if (skipped.length > 0) console.warn('Skipped entries:', skipped);
       return cards;
     }
 
     function render(cards) {
       const grid = document.getElementById('cards');
+      const noCars = document.getElementById('no-cars');
       grid.innerHTML = '';
+
+      if (cards.length === 0) {
+        noCars.style.display = 'block';
+        return;
+      } else {
+        noCars.style.display = 'none';
+      }
+
       cards.forEach(c => {
         const div = document.createElement('div');
         div.className = 'card';
         div.innerHTML = `
+          <div class="driver-name">${c.driverNames}</div>
+          <div class="car-info">${c.carName}</div>
           <div class="car-no">Car #${c.carNo}</div>
-          <div>${c.label}</div>
-          <div class="countdown ${c.late ? 'late' : ''}">${c.countdown}</div>
+          <div class="tc-label">${c.label}</div>
+          <div class="countdown ${c.displayClass}">${c.countdown}</div>
           <button class="back-btn">←</button>
         `;
         div.addEventListener('click', () => {
