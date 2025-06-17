@@ -57,7 +57,7 @@
     let tcSequence = [];
 
     function parseSheet(data) {
-      const entryRow = data[4];
+      const entryRow = data[3];
       const carNos = entryRow.slice(2).filter(e => e !== '');
       tcSequence = data.slice(5).map(row => row[0]).filter(tc => tc); // 自動取得
       const currentRow = data.find(r => r[0] === tcSequence[currentTcIndex]);
