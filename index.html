@@ -1,241 +1,41 @@
 <!DOCTYPE html>
 <html lang="ja">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>サービスカウントダウン</title>
-  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/dayjs@1/dayjs.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/dayjs@1/plugin/customParseFormat.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/dayjs@1/plugin/utc.js"></script>
-  <script>dayjs.extend(dayjs_plugin_customParseFormat); dayjs.extend(dayjs_plugin_utc);</script>
-  <style>
-    body {
-      background: #111;
-      color: #fff;
-      font-family: sans-serif;
-      padding: 1em;
-    }
-    .grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-      gap: 1em;
-    }
-    .card {
-      background: #222;
-      padding: 1em;
-      border-radius: 10px;
-      text-align: center;
-      box-shadow: 0 0 10px #0005;
-      cursor: pointer;
-      position: relative;
-    }
-    .driver-name {
-      font-size: 1.4em;
-      font-weight: bold;
-      margin-bottom: 0.2em;
-    }
-    .car-info {
-      font-size: 0.9em;
-      margin-bottom: 0.5em;
-      color: #ccc;
-    }
-    .tc-label {
-      font-size: 1.2em;
-      font-weight: bold;
-      color: #ddd;
-      margin-bottom: 0.3em;
-    }
-    .car-no {
-      font-size: 1em;
-      color: #aaa;
-      margin-bottom: 0.2em;
-    }
-    .countdown {
-      font-size: 1.8em;
-      font-weight: bold;
-    }
-    .late {
-      color: #ff3b3b;
-      text-shadow: 0 0 5px #f00;
-    }
-    .upcoming {
-      color: #7ec8f7;
-    }
-    .back-btn {
-      position: absolute;
-      top: 5px;
-      right: 5px;
-      background: #444;
-      color: white;
-      border: none;
-      border-radius: 4px;
-      padding: 2px 6px;
-      cursor: pointer;
-      font-size: 0.8em;
-    }
-    .no-cars {
-      text-align: center;
-      margin-top: 2em;
-      font-size: 1.5em;
-      color: #888;
-    }
-  </style>
-</head>
-<body>
-  <h1>サービスカウントダウンクロック</h1>
-  <div class="grid" id="cards"></div>
-  <div class="no-cars" id="no-cars" style="display: none;">No car scheduled</div>
-
-  <script>
-    const SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQpiZZxE_7sQZgkAvTfRgsDwqg4EGBTUmXY4nnhxqy4bMdXXbzLV98rSEe9d7kX_dI7ZF_-HeQRUZQA/pub?output=csv';
-    let sheetData = [];
-    let tcSequence = [];
-    const currentTcIndexMap = new Map();
-
-    function parseSheet(data) {
-      const entryRow = data[3];
-      const nameRow = data[2];
-      const carRow = data[1];
-      const carNos = [];
-
-      for (let idx = 2; idx < entryRow.length; idx++) {
-        if (entryRow[idx]) {
-          carNos.push({ value: entryRow[idx], idx });
-        }
-      }
-
-      const tcRows = data.slice(4).filter(row => row[0]);
-      tcSequence = tcRows.map(row => row[0]);
-      const now = dayjs();
-      const cards = [];
-      const skipped = [];
-
-      carNos.forEach(({ value: carNo, idx }) => {
-        const tcIndex = currentTcIndexMap.has(carNo) ? currentTcIndexMap.get(carNo) : 0;
-        if (tcIndex >= tcRows.length) {
-          skipped.push(carNo + ': TC index out of bounds');
-          return;
-        }
-        const tcRow = tcRows[tcIndex];
-
-        const label = tcRow[1];
-        const countdownThreshold = parseInt(tcRow[2]);
-        const timeStrRaw = tcRow[idx];
-        const timeStr = (timeStrRaw || '').trim();
-
-        if (!/^\d{1,2}:\d{2}(?::\d{2})?$/.test(timeStr)) {
-          skipped.push(carNo + ': invalid time format');
-          return;
-        }
-
-        const [h, m, s = 0] = timeStr.split(":").map(Number);
-        let serviceTime = now.set('hour', h).set('minute', m).set('second', s).set('millisecond', 0);
-        if (!serviceTime.isValid()) {
-          skipped.push(carNo + ': invalid date');
-          return;
-        }
-
-        const countdownStart = serviceTime.subtract(countdownThreshold, 'minute');
-        let displayText;
-        let displayClass = '';
-
-        if (now.isBefore(countdownStart)) {
-          displayText = serviceTime.format('HH:mm:ss');
-          displayClass = 'upcoming';
-        } else if (now.isBefore(serviceTime)) {
-          const diff = serviceTime.diff(now, 'second');
-          const hh = Math.floor(diff / 3600);
-          const mm = Math.floor((diff % 3600) / 60);
-          const ss = diff % 60;
-          displayText = `T-${hh.toString().padStart(2, 0)}:${mm.toString().padStart(2, 0)}:${ss.toString().padStart(2, 0)}`;
-        } else {
-          let diff = now.diff(serviceTime, 'second');
-          const sign = diff < 0 ? '-' : '+';
-          diff = Math.abs(diff);
-          const hh = Math.floor(diff / 3600);
-          const mm = Math.floor((diff % 3600) / 60);
-          const ss = diff % 60;
-          displayText = `${sign}${hh.toString().padStart(2, 0)}:${mm.toString().padStart(2, 0)}:${ss.toString().padStart(2, 0)}`;
-          displayClass = 'late';
-        }
-
-        const carName = nameRow[idx] || '';
-        const driverNames = carRow[idx] || '';
-
-        cards.push({
-          carNo,
-          label,
-          countdown: displayText,
-          displayClass,
-          driverNames,
-          carName
-        });
-      });
-
-      if (skipped.length > 0) console.warn('Skipped entries:', skipped);
-      return cards;
-    }
-
-    function render(cards) {
-      const grid = document.getElementById('cards');
-      const noCars = document.getElementById('no-cars');
-      grid.innerHTML = '';
-
-      if (cards.length === 0) {
-        noCars.style.display = 'block';
-        return;
-      } else {
-        noCars.style.display = 'none';
-      }
-
-      cards.forEach(c => {
-        const div = document.createElement('div');
-        div.className = 'card';
-        div.innerHTML = `
-          <div class="driver-name">${c.driverNames}</div>
-          <div class="car-info">${c.carName}</div>
-          <div class="car-no">Car #${c.carNo}</div>
-          <div class="tc-label">${c.label}</div>
-          <div class="countdown ${c.displayClass}">${c.countdown}</div>
-          <button class="back-btn">←</button>
-        `;
-        div.addEventListener('click', () => {
-          const current = currentTcIndexMap.get(c.carNo) || 0;
-          const next = (current + 1) % tcSequence.length;
-          currentTcIndexMap.set(c.carNo, next);
-          refresh();
-        });
-        div.querySelector('.back-btn').addEventListener('click', e => {
-          e.stopPropagation();
-          const current = currentTcIndexMap.get(c.carNo) || 0;
-          const next = (current - 1 + tcSequence.length) % tcSequence.length;
-          currentTcIndexMap.set(c.carNo, next);
-          refresh();
-        });
-        grid.appendChild(div);
-      });
-    }
-
-    function refresh() {
-      if (sheetData.length > 0) {
-        render(parseSheet(sheetData));
-      }
-    }
-
-    function fetchData() {
-      Papa.parse(SHEET_CSV_URL, {
-        download: true,
-        complete: results => {
-          sheetData = results.data;
-          refresh();
-        }
-      });
-    }
-
-    fetchData();
-    setInterval(refresh, 1000);
-    setInterval(fetchData, 30000);
-  </script>
-</body>
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>モーターラリー サービスタイマー</title>
+        <link rel="stylesheet" href="style.css">
+    </head>
+    <body>
+        <div class="settings">
+            <label for="timerCount">タイマーの数:</label>
+            <input type="number" id="timerCount" value="2" min="1">
+            <button id="updateTimers">更新</button>
+        </div>
+        
+        <div class="timers-container" id="timersContainer">
+        </div>
+        
+        <div id="editModal" class="modal">
+            <div class="modal-content">
+                <h3>編集</h3>
+                <div>
+                    <label for="editHours">サービスイン時刻 (時):</label>
+                    <input type="number" id="editHours" min="0" max="23">
+                </div>
+                <div>
+                    <label for="editMinutes">サービスイン時刻 (分):</label>
+                    <input type="number" id="editMinutes" min="0" max="59">
+                </div>
+                <div>
+                    <label for="editTargetMinutes">目標時間 (分):</label>
+                    <input type="number" id="editTargetMinutes" min="1">
+                </div>
+                <button id="saveEditBtn">設定</button>
+                <button id="closeModalBtn">キャンセル</button>
+            </div>
+        </div>
+        
+        <script src="script.js"></script>
+    </body>
 </html>
