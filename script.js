@@ -6,6 +6,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const targetTimeCommonEl = document.getElementById('targetTimeCommon');
     const editModal = document.getElementById('editModal');
     const editTargetMinutesInput = document.getElementById('editTargetMinutes');
+    const editAlertMinutesInput = document.getElementById('editAlertMinutes'); // 新しい入力フィールド
     const saveEditBtn = document.getElementById('saveEditBtn');
     const closeModalBtn = document.getElementById('closeModalBtn');
     const setInTimeModal = document.getElementById('setInTimeModal');
@@ -15,9 +16,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const closeInTimeBtn = document.getElementById('closeInTimeBtn');
 
     let timers = [];
-    let commonTargetMinutes = 5; // 共通の目標時間
+    let commonTargetMinutes = 5;
+    let commonAlertMinutes = 1; // 新しい共通のアラート時間
 
-    // タイマーのHTMLテンプレート
     const timerTemplate = (id) => `
         <div class="timer-unit">
             <div class="current-time">--:--:--</div>
@@ -41,7 +42,6 @@ document.addEventListener('DOMContentLoaded', () => {
         </div>
     `;
 
-    // タイマーを生成
     function generateTimers() {
         const count = parseInt(timerCountInput.value);
         if (isNaN(count) || count < 1) {
@@ -68,7 +68,6 @@ document.addEventListener('DOMContentLoaded', () => {
         updateCommonDisplay();
     }
     
-    // イベントリスナーを再設定
     function addEventListeners() {
         const inBtns = document.querySelectorAll('.control-btn');
         const editInTimeBtns = document.querySelectorAll('.edit-in-time-btn');
@@ -78,7 +77,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 const id = parseInt(e.target.dataset.id);
                 const timer = timers[id - 1];
                 
-                // 秒単位を切り捨てた時刻を設定
                 const now = new Date();
                 now.setSeconds(0, 0);
                 timer.serviceInTime = now;
@@ -93,7 +91,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 currentEditingUnitIndex = id - 1;
                 setInTimeModal.style.display = 'flex';
                 
-                // 現在の時刻を初期値としてセット
                 const now = new Date();
                 setHoursInput.value = now.getHours();
                 setMinutesInput.value = now.getMinutes();
@@ -101,7 +98,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // 現在時刻を更新（全タイマー共通）
     function updateCurrentTime() {
         const now = new Date();
         const hours = now.getHours().toString().padStart(2, '0');
@@ -113,7 +109,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     setInterval(updateCurrentTime, 1000);
 
-    // 残り時間を更新（各タイマー）
     function updateRemainingTime() {
         timers.forEach(timer => {
             if (!timer.serviceInTime) return;
@@ -122,10 +117,13 @@ document.addEventListener('DOMContentLoaded', () => {
             const elapsedTimeInSeconds = Math.floor((now - timer.serviceInTime) / 1000);
             const targetSeconds = commonTargetMinutes * 60;
             const remainingSeconds = targetSeconds - elapsedTimeInSeconds;
+            const alertSeconds = commonAlertMinutes * 60;
 
             if (remainingSeconds <= 0) {
                 timer.elements.remainingTime.textContent = "00:00:00";
                 timer.elements.remainingTime.style.color = 'red';
+                timer.elements.remainingTime.classList.remove('blinking-background');
+                timer.elements.remainingTime.parentElement.classList.remove('blinking-background');
             } else {
                 const displayMinutes = Math.floor(remainingSeconds / 60);
                 const displaySeconds = remainingSeconds % 60;
@@ -137,12 +135,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 timer.elements.remainingTime.textContent = `${formattedHours}:${formattedMinutes}:${formattedSeconds}`;
                 timer.elements.remainingTime.style.color = '#0F0';
+
+                // アラート時間のチェック
+                if (remainingSeconds <= alertSeconds) {
+                    timer.elements.remainingTime.classList.add('blinking-background');
+                    timer.elements.remainingTime.parentElement.classList.add('blinking-background');
+                } else {
+                    timer.elements.remainingTime.classList.remove('blinking-background');
+                    timer.elements.remainingTime.parentElement.classList.remove('blinking-background');
+                }
             }
         });
     }
     setInterval(updateRemainingTime, 1000);
 
-    // 時間表示を更新
     function updateTimesDisplay(timer) {
         if (timer.serviceInTime) {
             const inHours = timer.serviceInTime.getHours().toString().padStart(2, '0');
@@ -156,24 +162,24 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // 共通表示を更新
     function updateCommonDisplay() {
         targetTimeCommonEl.textContent = `${commonTargetMinutes} min`;
     }
 
-    // 共通目標時間設定
     editBtnCommon.addEventListener('click', () => {
         editModal.style.display = 'flex';
         editTargetMinutesInput.value = commonTargetMinutes;
+        editAlertMinutesInput.value = commonAlertMinutes;
     });
 
     saveEditBtn.addEventListener('click', () => {
         const newTargetMinutes = parseInt(editTargetMinutesInput.value);
-        if (!isNaN(newTargetMinutes) && newTargetMinutes > 0) {
+        const newAlertMinutes = parseInt(editAlertMinutesInput.value);
+        if (!isNaN(newTargetMinutes) && newTargetMinutes > 0 && !isNaN(newAlertMinutes) && newAlertMinutes >= 0) {
             commonTargetMinutes = newTargetMinutes;
+            commonAlertMinutes = newAlertMinutes;
             editModal.style.display = 'none';
             updateCommonDisplay();
-            // すべてのタイマーの表示を再計算
             timers.forEach(timer => updateTimesDisplay(timer));
             updateRemainingTime();
         } else {
@@ -185,7 +191,6 @@ document.addEventListener('DOMContentLoaded', () => {
         editModal.style.display = 'none';
     });
     
-    // サービスイン時刻手動設定
     saveInTimeBtn.addEventListener('click', () => {
         const newHours = parseInt(setHoursInput.value);
         const newMinutes = parseInt(setMinutesInput.value);
@@ -205,7 +210,6 @@ document.addEventListener('DOMContentLoaded', () => {
         setInTimeModal.style.display = 'none';
     });
     
-    // 初期表示
     updateTimersBtn.addEventListener('click', generateTimers);
     generateTimers();
 });

@@ -133,3 +133,15 @@ body {
     text-align: center;
     color: #fff;
 }
+
+/* 点滅アニメーション */
+@keyframes blink-background {
+    50% {
+        background-color: #fff;
+        color: #000;
+    }
+}
+
+.blinking-background {
+    animation: blink-background 1s step-end infinite;
+}

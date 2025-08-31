@@ -23,10 +23,14 @@
         
         <div id="editModal" class="modal">
             <div class="modal-content">
-                <h3>共通目標時間設定</h3>
+                <h3>共通時間設定</h3>
                 <div>
                     <label for="editTargetMinutes">目標時間 (分):</label>
                     <input type="number" id="editTargetMinutes" min="1">
+                </div>
+                <div>
+                    <label for="editAlertMinutes">アラート時間 (分):</label>
+                    <input type="number" id="editAlertMinutes" min="0">
                 </div>
                 <button id="saveEditBtn">設定</button>
                 <button id="closeModalBtn">キャンセル</button>
