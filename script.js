@@ -2,20 +2,25 @@ document.addEventListener('DOMContentLoaded', () => {
     const timersContainer = document.getElementById('timersContainer');
     const timerCountInput = document.getElementById('timerCount');
     const updateTimersBtn = document.getElementById('updateTimers');
+    const editBtnCommon = document.getElementById('editBtnCommon');
+    const targetTimeCommonEl = document.getElementById('targetTimeCommon');
     const editModal = document.getElementById('editModal');
-    const editHoursInput = document.getElementById('editHours');
-    const editMinutesInput = document.getElementById('editMinutes');
     const editTargetMinutesInput = document.getElementById('editTargetMinutes');
     const saveEditBtn = document.getElementById('saveEditBtn');
     const closeModalBtn = document.getElementById('closeModalBtn');
+    const setInTimeModal = document.getElementById('setInTimeModal');
+    const setHoursInput = document.getElementById('setHours');
+    const setMinutesInput = document.getElementById('setMinutes');
+    const saveInTimeBtn = document.getElementById('saveInTimeBtn');
+    const closeInTimeBtn = document.getElementById('closeInTimeBtn');
 
     let timers = [];
-    let currentEditingUnitIndex = null;
+    let commonTargetMinutes = 5; // 共通の目標時間
 
     // タイマーのHTMLテンプレート
     const timerTemplate = (id) => `
         <div class="timer-unit">
-            <div class="current-time" id="currentTime${id}">--:--:--</div>
+            <div class="current-time">--:--:--</div>
             <div class="remaining-time" id="remainingTime${id}">00:00:00</div>
             <div class="time-records">
                 <div class="time-record out-time">
@@ -23,11 +28,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     <span id="outTime${id}">--:--</span>
                 </div>
                 <div class="target-time-display">
-                    <span class="label">Target Time</span>
-                    <span id="targetTime${id}">--:--</span>
-                    <span class="edit-icon" data-id="${id}">✏️</span>
-                </div>
-                <div class="time-record in-time">
                     <span class="label">IN</span>
                     <span id="inTime${id}">--:--</span>
                 </div>
@@ -35,10 +35,13 @@ document.addEventListener('DOMContentLoaded', () => {
             <div class="control-buttons">
                 <button class="control-btn" data-id="${id}">IN</button>
             </div>
+            <div class="edit-in-time">
+                <button class="edit-in-time-btn" data-id="${id}">手動設定</button>
+            </div>
         </div>
     `;
 
-    // タイマーを生成してイベントリスナーを設定する関数
+    // タイマーを生成
     function generateTimers() {
         const count = parseInt(timerCountInput.value);
         if (isNaN(count) || count < 1) {
@@ -46,7 +49,6 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        // 既存のタイマーをクリア
         timersContainer.innerHTML = '';
         timers = [];
 
@@ -54,52 +56,47 @@ document.addEventListener('DOMContentLoaded', () => {
             timersContainer.insertAdjacentHTML('beforeend', timerTemplate(i));
             timers.push({
                 serviceInTime: null,
-                targetMinutes: 5,
                 elements: {
                     remainingTime: document.getElementById(`remainingTime${i}`),
                     inTime: document.getElementById(`inTime${i}`),
                     outTime: document.getElementById(`outTime${i}`),
-                    targetTime: document.getElementById(`targetTime${i}`)
                 }
             });
         }
         
-        // 新しく生成されたボタンにイベントリスナーを再設定
         addEventListeners();
+        updateCommonDisplay();
     }
     
-    // イベントリスナーをボタンに動的に設定する関数
+    // イベントリスナーを再設定
     function addEventListeners() {
         const inBtns = document.querySelectorAll('.control-btn');
-        const editBtns = document.querySelectorAll('.edit-icon');
+        const editInTimeBtns = document.querySelectorAll('.edit-in-time-btn');
 
         inBtns.forEach(btn => {
             btn.addEventListener('click', (e) => {
                 const id = parseInt(e.target.dataset.id);
                 const timer = timers[id - 1];
-                timer.serviceInTime = new Date();
+                
+                // 秒単位を切り捨てた時刻を設定
+                const now = new Date();
+                now.setSeconds(0, 0);
+                timer.serviceInTime = now;
+                
                 updateTimesDisplay(timer);
-                updateRemainingTime();
             });
         });
 
-        editBtns.forEach(btn => {
+        editInTimeBtns.forEach(btn => {
             btn.addEventListener('click', (e) => {
                 const id = parseInt(e.target.dataset.id);
                 currentEditingUnitIndex = id - 1;
-                const timer = timers[currentEditingUnitIndex];
+                setInTimeModal.style.display = 'flex';
                 
-                editModal.style.display = 'flex';
-                
-                if (timer.serviceInTime) {
-                    editHoursInput.value = timer.serviceInTime.getHours();
-                    editMinutesInput.value = timer.serviceInTime.getMinutes();
-                } else {
-                    const now = new Date();
-                    editHoursInput.value = now.getHours();
-                    editMinutesInput.value = now.getMinutes();
-                }
-                editTargetMinutesInput.value = timer.targetMinutes;
+                // 現在の時刻を初期値としてセット
+                const now = new Date();
+                setHoursInput.value = now.getHours();
+                setMinutesInput.value = now.getMinutes();
             });
         });
     }
@@ -123,7 +120,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const now = new Date();
             const elapsedTimeInSeconds = Math.floor((now - timer.serviceInTime) / 1000);
-            const targetSeconds = timer.targetMinutes * 60;
+            const targetSeconds = commonTargetMinutes * 60;
             const remainingSeconds = targetSeconds - elapsedTimeInSeconds;
 
             if (remainingSeconds <= 0) {
@@ -152,30 +149,32 @@ document.addEventListener('DOMContentLoaded', () => {
             const inMinutes = timer.serviceInTime.getMinutes().toString().padStart(2, '0');
             timer.elements.inTime.textContent = `${inHours}:${inMinutes}`;
 
-            const outTime = new Date(timer.serviceInTime.getTime() + timer.targetMinutes * 60 * 1000);
+            const outTime = new Date(timer.serviceInTime.getTime() + commonTargetMinutes * 60 * 1000);
             const outHours = outTime.getHours().toString().padStart(2, '0');
             const outMinutes = outTime.getMinutes().toString().padStart(2, '0');
             timer.elements.outTime.textContent = `${outHours}:${outMinutes}`;
         }
-        timer.elements.targetTime.textContent = `${timer.targetMinutes} min`;
     }
 
-    // イベントリスナーの設定
-    updateTimersBtn.addEventListener('click', generateTimers);
+    // 共通表示を更新
+    function updateCommonDisplay() {
+        targetTimeCommonEl.textContent = `${commonTargetMinutes} min`;
+    }
+
+    // 共通目標時間設定
+    editBtnCommon.addEventListener('click', () => {
+        editModal.style.display = 'flex';
+        editTargetMinutesInput.value = commonTargetMinutes;
+    });
 
     saveEditBtn.addEventListener('click', () => {
-        const newHours = parseInt(editHoursInput.value);
-        const newMinutes = parseInt(editMinutesInput.value);
         const newTargetMinutes = parseInt(editTargetMinutesInput.value);
-
-        if (currentEditingUnitIndex !== null && !isNaN(newHours) && !isNaN(newMinutes) && !isNaN(newTargetMinutes) && newTargetMinutes > 0) {
-            const timer = timers[currentEditingUnitIndex];
-            const now = new Date();
-            timer.serviceInTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(), newHours, newMinutes, 0, 0);
-            timer.targetMinutes = newTargetMinutes;
-            
+        if (!isNaN(newTargetMinutes) && newTargetMinutes > 0) {
+            commonTargetMinutes = newTargetMinutes;
             editModal.style.display = 'none';
-            updateTimesDisplay(timer);
+            updateCommonDisplay();
+            // すべてのタイマーの表示を再計算
+            timers.forEach(timer => updateTimesDisplay(timer));
             updateRemainingTime();
         } else {
             alert('有効な値を入力してください。');
@@ -186,7 +185,27 @@ document.addEventListener('DOMContentLoaded', () => {
         editModal.style.display = 'none';
     });
     
+    // サービスイン時刻手動設定
+    saveInTimeBtn.addEventListener('click', () => {
+        const newHours = parseInt(setHoursInput.value);
+        const newMinutes = parseInt(setMinutesInput.value);
+        if (currentEditingUnitIndex !== null && !isNaN(newHours) && !isNaN(newMinutes)) {
+            const timer = timers[currentEditingUnitIndex];
+            const now = new Date();
+            timer.serviceInTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(), newHours, newMinutes, 0, 0);
+            setInTimeModal.style.display = 'none';
+            updateTimesDisplay(timer);
+            updateRemainingTime();
+        } else {
+            alert('有効な値を入力してください。');
+        }
+    });
+
+    closeInTimeBtn.addEventListener('click', () => {
+        setInTimeModal.style.display = 'none';
+    });
+    
     // 初期表示
+    updateTimersBtn.addEventListener('click', generateTimers);
     generateTimers();
-    updateCurrentTime();
 });

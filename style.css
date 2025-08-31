@@ -3,7 +3,7 @@ body {
     background-color: #000;
     color: #fff;
     display: flex;
-    flex-direction: column; /* 縦方向に要素を並べる */
+    flex-direction: column;
     justify-content: flex-start;
     align-items: center;
     height: 100vh;
@@ -13,6 +13,15 @@ body {
 .settings {
     margin: 20px;
     font-size: 1.2em;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+}
+
+.target-time-common {
+    display: flex;
+    align-items: center;
+    gap: 5px;
 }
 
 .timers-container {
@@ -21,7 +30,7 @@ body {
     align-items: flex-start;
     width: 100%;
     flex-wrap: wrap;
-    flex-grow: 1; /* 残りのスペースを埋める */
+    flex-grow: 1;
 }
 
 .timer-unit {
@@ -32,7 +41,10 @@ body {
     margin: 10px;
     flex: 1;
     min-width: 300px;
-    max-width: 450px; /* 大きくなりすぎないようにする */
+    max-width: 450px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
 }
 
 .current-time {
